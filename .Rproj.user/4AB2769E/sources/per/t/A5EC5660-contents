@@ -1,0 +1,1005 @@
+
+# Load required libraries
+library(ggplot2)
+library(scales)
+library(stats)
+library(data.table)
+library(caret)
+library(miscTools)
+library(pROC)
+library(dplyr)
+library(cvAUC)
+library(writexl)
+library(ggcorrplot)
+library(ggpubr)
+
+
+
+
+library(haven)
+long_data_1 <- read_sav("Dropbox/OPBG_FCD_Paper/long_data_1.sav")
+View(long_data_1)
+
+### Impostare database definitivi per l'analisi ####
+
+fcd <- long_data_1 %>% mutate(FCD = ifelse(FCD == 0, "I","II")) %>% mutate(Electrodes = ifelse(Electrodes == 0, "non-SOZ","SOZ")) %>%
+  mutate(Time = ifelse(Time == 1, "Pre-Ictal", "Ictal"))%>% mutate(Gender = ifelse(Gender == 1, "Male", "Female")) %>% 
+  mutate(Seizure_Frequency = case_when(Seizure_Frequency == 0 ~ "Daily", Seizure_Frequency == 1 ~"Weekly", Seizure_Frequency == 2 ~ "Monthly"))
+
+fcd <- fcd %>% mutate(Low = ifelse(Low == 0, "3-4Hz", "4-30Hz")) %>% mutate(High = ifelse(High == 0, "gamma","ripples"))
+
+fcd <- fcd %>% mutate(FCD = factor(FCD)) %>% mutate(Electrodes = factor (Electrodes)) %>% mutate(Time = factor(Time, levels = c("Pre-Ictal","Ictal")))
+
+fcd <- fcd %>% mutate(Low = factor(Low)) %>% mutate(High = factor(High)) %>% mutate(Id = factor(Id))
+
+fcd <- fcd %>% mutate(Gender = factor(Gender)) %>% mutate(Seizure_Frequency = factor(Seizure_Frequency, levels = c("Daily","Weekly","Monthly")))
+
+
+classic <- fcd %>% filter(Low == "3-4Hz" & High == "ripples")
+
+classic2<- fcd %>% filter(Low == "4-30Hz" & High == "ripples")
+
+gamma<- fcd %>% filter(Low == "3-4Hz" & High == "gamma")
+
+gamma2<- fcd %>% filter(Low == "4-30Hz" & High == "gamma")
+
+
+
+classic_isoz <- classic %>% filter(Time == "Ictal" & Electrodes == "SOZ")
+
+classic_insoz <- classic %>% filter(Time == "Ictal" & Electrodes == "non-SOZ")
+
+classic_psoz <- classic %>% filter(Time == "Pre-Ictal" & Electrodes == "SOZ")
+
+classic_pnsoz <- classic %>% filter(Time == "Pre-Ictal" & Electrodes == "non-SOZ")
+
+
+classic2_isoz <- classic2 %>% filter(Time == "Ictal" & Electrodes == "SOZ")
+
+classic2_insoz <- classic2 %>% filter(Time == "Ictal" & Electrodes == "non-SOZ")
+
+classic2_psoz <- classic2 %>% filter(Time == "Pre-Ictal" & Electrodes == "SOZ")
+
+classic2_pnsoz <- classic2 %>% filter(Time == "Pre-Ictal" & Electrodes == "non-SOZ")
+
+
+gamma_isoz <- gamma %>% filter(Time == "Ictal" & Electrodes == "SOZ")
+
+gamma_insoz <- gamma %>% filter(Time == "Ictal" & Electrodes == "non-SOZ")
+
+gamma_psoz <- gamma %>% filter(Time == "Pre-Ictal" & Electrodes == "SOZ")
+
+gamma_pnsoz <- gamma %>% filter(Time == "Pre-Ictal" & Electrodes == "non-SOZ")
+
+
+gamma2_isoz <- gamma2 %>% filter(Time == "Ictal" & Electrodes == "SOZ")
+
+gamma2_insoz <- gamma2 %>% filter(Time == "Ictal" & Electrodes == "non-SOZ")
+
+gamma2_psoz <- gamma2 %>% filter(Time == "Pre-Ictal" & Electrodes == "SOZ")
+
+gamma2_pnsoz <- gamma2 %>% filter(Time == "Pre-Ictal" & Electrodes == "non-SOZ")
+
+
+
+
+# violin plot
+my_comparisons <- list( c("I","II"))
+
+
+fcd %>%
+  ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)+
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")
+
+
+fcd %>%   ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)
+
+
+classic %>%
+  ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)+
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")
+
+
+classic2 %>%
+  ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)+
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")
+
+
+gamma %>%
+  ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)+
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")
+
+
+gamma2 %>%
+  ggviolin(x = "FCD", y = "PAC", add = "boxplot", add.params = list(fill = "white"), fill = "FCD", palette = "nejm")  + facet_grid(Electrodes ~ Time)+
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif")
+
+
+################################################################################################################################
+
+
+## Curva ROC
+
+
+roc_data <- classic %>% filter(Electrodes == "SOZ")
+
+## ROC per dati 3-4 Hz e  Ripples 
+
+library("ROCit")
+
+rocit_emp <- rocit(score = roc_data$PAC, 
+                   class = roc_data$FCD, 
+                   method = "emp")
+
+
+rocit_bin <- rocit(score = roc_data$PAC, 
+                   class = roc_data$FCD,  
+                   method = "bin")
+
+rocit_non <- rocit(score = roc_data$PAC, 
+                   class = roc_data$FCD, 
+                   method = "non")
+
+# --------------------------
+
+plot(rocit_emp, col = 1, 
+     legend = FALSE, percentage = TRUE)
+lines(rocit_non$TPR~rocit_non$FPR, 
+      col = 4, lwd = 2)    
+legend("bottomright", c("Empirical ROC","non-parametric ROC",
+                        "95% CI (Empirical)"),
+       lty = c(1,1,2,2), col = 
+         c(1,4,1,4), lwd = c(2,2,1,1),cex = 0.5)
+
+####################################
+
+ciROC_emp90 <- ciROC(rocit_emp, 
+                     level = 0.9)
+set.seed(200)
+ciROC_bin90 <- ciROC(rocit_bin, 
+                     level = 0.9, nboot = 200)
+plot(ciROC_emp90, col = 1, 
+     legend = FALSE)
+lines(ciROC_bin90$TPR~ciROC_bin90$FPR, 
+      col = 2, lwd = 2)
+lines(ciROC_bin90$LowerTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(ciROC_bin90$UpperTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(rocit_non$TPR~rocit_non$FPR, 
+      col = 4, lwd = 2)   
+legend("bottomright", c("Empirical ROC",
+                        "Binormal ROC",
+                        "90% CI (Empirical)", 
+                        "90% CI (Binormal)"),
+       lty = c(1,1,2,2), col = 
+         c(1,2,1,2), lwd = c(2,2,1,1))
+
+
+### Optimal Threshold
+
+library(pROC)
+
+rocobj <- roc(roc_data$FCD, roc_data$PAC)
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+### 95% CI della curva ROC
+
+roc_ci <- roc(roc_data$FCD, roc_data$PAC)
+
+ci.auc(roc_ci)
+
+ci.coords(roc_ci, x = 0.075, ret = "accuracy", transpose = FALSE)
+ci.coords(roc_ci, x = 0.075, ret = "sens", transpose = FALSE)
+ci.coords(roc_ci, x = 0.075, ret = "spec", transpose = FALSE)
+ci.coords(roc_ci, x = 0.075, ret = "ppv", transpose = FALSE)
+ci.coords(roc_ci, x = 0.075, ret = "npv", transpose = FALSE)
+
+################################################################################################################################
+
+#### ROC data per 4-30 Hz e Ripples
+
+
+roc_data2 <- classic2 %>% filter(Electrodes == "SOZ")
+
+
+library("ROCit")
+
+rocit_emp2 <- rocit(score = roc_data2$PAC, 
+                   class = roc_data2$FCD, 
+                   method = "emp")
+
+
+rocit_bin2 <- rocit(score = roc_data2$PAC, 
+                   class = roc_data2$FCD,  
+                   method = "bin")
+
+rocit_non2 <- rocit(score = roc_data2$PAC, 
+                   class = roc_data2$FCD, 
+                   method = "non")
+# --------------------------
+
+plot(rocit_emp2, col = 1, 
+     legend = FALSE, percentage = TRUE)
+lines(rocit_non2$TPR~rocit_non2$FPR, 
+      col = 4, lwd = 2)    
+legend("bottomright", c("Empirical ROC","non-parametric ROC",
+                        "95% CI (Empirical)"),
+       lty = c(1,1,2,2), col = 
+         c(1,4,1,4), lwd = c(2,2,1,1),cex = 0.5)
+
+
+
+####################################
+
+ciROC_emp90 <- ciROC(rocit_emp2, 
+                     level = 0.9)
+set.seed(200)
+ciROC_bin90 <- ciROC(rocit_bin2, 
+                     level = 0.9, nboot = 200)
+plot(ciROC_emp90, col = 1, 
+     legend = FALSE)
+lines(ciROC_bin90$TPR~ciROC_bin90$FPR, 
+      col = 2, lwd = 2)
+lines(ciROC_bin90$LowerTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(ciROC_bin90$UpperTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(rocit_non2$TPR~rocit_non2$FPR, 
+      col = 4, lwd = 2)   
+legend("bottomright", c("Empirical ROC",
+                        "Binormal ROC",
+                        "90% CI (Empirical)", 
+                        "90% CI (Binormal)"),
+       lty = c(1,1,2,2), col = 
+         c(1,2,1,2), lwd = c(2,2,1,1))
+
+### Optimal Threshold
+
+library(pROC)
+
+rocobj2 <- roc(roc_data2$FCD, roc_data2$PAC)
+plot(rocobj2)
+ci.thresolds.obj <- ci.thresholds(rocobj2)
+plot(ci.thresolds.obj)
+rocobj2$auc
+coords(rocobj2, "best")
+coords(rocobj2, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+### 95% CI della curva ROC
+
+roc_ci2 <- roc(roc_data2$FCD, roc_data2$PAC)
+
+ci.auc(roc_ci2)
+
+ci.coords(roc_ci2, x = 0.075, ret = "accuracy", transpose = FALSE)
+ci.coords(roc_ci2, x = 0.075, ret = "sens", transpose = FALSE)
+ci.coords(roc_ci2, x = 0.075, ret = "spec", transpose = FALSE)
+ci.coords(roc_ci2, x = 0.075, ret = "ppv", transpose = FALSE)
+ci.coords(roc_ci2, x = 0.075, ret = "npv", transpose = FALSE)
+
+
+#######################################################################################################################
+
+#### Roc per dati 3-4 Hz e Gamma
+
+roc_data3 <- gamma %>% filter(Electrodes == "SOZ")
+
+library("ROCit")
+
+rocit_emp3 <- rocit(score = roc_data3$PAC, 
+                    class = roc_data3$FCD, 
+                    method = "emp")
+
+
+rocit_bin3 <- rocit(score = roc_data3$PAC, 
+                    class = roc_data3$FCD,  
+                    method = "bin")
+
+rocit_non3 <- rocit(score = roc_data3$PAC, 
+                    class = roc_data3$FCD, 
+                    method = "non")
+# --------------------------
+
+plot(rocit_emp3, col = 1, 
+     legend = FALSE, percentage = TRUE)
+lines(rocit_non3$TPR~rocit_non3$FPR, 
+      col = 4, lwd = 2)    
+legend("bottomright", c("Empirical ROC","non-parametric ROC",
+                        "95% CI (Empirical)"),
+       lty = c(1,1,2,2), col = 
+         c(1,4,1,4), lwd = c(2,2,1,1),cex = 0.5)
+
+
+####################################
+
+ciROC_emp90 <- ciROC(rocit_emp3, 
+                     level = 0.9)
+set.seed(200)
+ciROC_bin90 <- ciROC(rocit_bin2, 
+                     level = 0.9, nboot = 200)
+plot(ciROC_emp90, col = 1, 
+     legend = FALSE)
+lines(ciROC_bin90$TPR~ciROC_bin90$FPR, 
+      col = 2, lwd = 2)
+lines(ciROC_bin90$LowerTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(ciROC_bin90$UpperTPR~ciROC_bin90$FPR, 
+      col = 2, lty = 2)
+lines(rocit_non3$TPR~rocit_non3$FPR, 
+      col = 4, lwd = 2)   
+legend("bottomright", c("Empirical ROC",
+                        "Binormal ROC",
+                        "90% CI (Empirical)", 
+                        "90% CI (Binormal)"),
+       lty = c(1,1,2,2), col = 
+         c(1,2,1,2), lwd = c(2,2,1,1))
+
+
+### Optimal Threshold
+
+library(pROC)
+
+rocobj3 <- roc(roc_data3$FCD, roc_data3$PAC)
+rocobj3$auc
+coords(rocobj3, "best")
+coords(rocobj3, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+### 95% CI della curva ROC
+
+roc_ci3 <- roc(roc_data3$FCD, roc_data3$PAC)
+
+ci.auc(roc_ci)
+
+ci.coords(roc_ci3, x = 0.075, ret = "accuracy", transpose = FALSE)
+ci.coords(roc_ci3, x = 0.075, ret = "sens", transpose = FALSE)
+ci.coords(roc_ci3, x = 0.075, ret = "spec", transpose = FALSE)
+ci.coords(roc_ci3, x = 0.075, ret = "ppv", transpose = FALSE)
+ci.coords(roc_ci3, x = 0.075, ret = "npv", transpose = FALSE)
+
+
+
+########################################################################################################
+
+### ROC per dati 4-30 Hz e Gamma ###
+
+
+roc_data4 <- gamma2 %>% filter(Electrodes == "SOZ")
+
+library("ROCit")
+
+rocit_emp4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "emp")
+
+
+rocit_bin4 <- rocit(score = classic2_isoz$PAC, 
+                    class = classic_isoz$FCD,  
+                    method = "bin")
+
+rocit_non4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "non")
+
+ciROC_emp90 <- ciROC(rocit_emp4, 
+                     level = 0.9)
+set.seed(200)
+
+plot(rocit_emp4, col = 1, 
+     legend = FALSE, percentage = TRUE)
+lines(rocit_non4$TPR~rocit_non4$FPR, 
+      col = 4, lwd = 2)    
+legend("bottomright", c("Empirical ROC","non-parametric ROC",
+                        "95% CI (Empirical)"),
+       lty = c(1,1,2,2), col = 
+         c(1,4,1,4), lwd = c(2,2,1,1),cex = 0.5)
+
+
+### Optimal Threshold
+
+library(pROC)
+
+rocobj4 <- roc(roc_data4$FCD, roc_data4$PAC)
+rocobj4$auc
+coords(rocobj4, "best")
+coords(rocobj4, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+### 95% CI della curva ROC
+
+roc_ci4 <- roc(roc_data4$FCD, roc_data4$PAC)
+
+ci.auc(roc_ci)
+
+ci.coords(roc_ci4, x = 0.075, ret = "accuracy", transpose = FALSE)
+ci.coords(roc_ci4, x = 0.075, ret = "sens", transpose = FALSE)
+ci.coords(roc_ci4, x = 0.075, ret = "spec", transpose = FALSE)
+ci.coords(roc_ci4, x = 0.075, ret = "ppv", transpose = FALSE)
+ci.coords(roc_ci4, x = 0.075, ret = "npv", transpose = FALSE)
+
+
+##################################################################################################
+
+###Figure numero 3 ###
+
+packages <- c("ggplot2", "dplyr", "lavaan", "plyr", "cowplot", "rmarkdown", 
+              "readr", "caTools", "bitops")
+
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+
+
+library(cowplot)
+library(dplyr)
+library(readr)
+
+source("R_rainclouds.R")
+source("summarySE.R")
+source("simulateData.R")
+
+# width and height variables for saved plots
+w = 6
+h = 3
+
+
+
+### 3-4 Hz and Ripples
+
+sumclassic <- summarySE(classic, measurevar = "PAC", groupvars=c("FCD", "Electrodes"))
+
+
+tre_ripples <- ggplot(classic, aes(x = Electrodes, y = PAC, fill = FCD)) +
+  geom_flat_violin(aes(fill = FCD),position = position_nudge(x = .1, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA)+
+  geom_point(aes(x = as.numeric(Electrodes)-.15, y = PAC, colour = FCD),position = position_jitter(width = .05), size = 1, shape = 20)+
+  geom_boxplot(aes(x = Electrodes, y = PAC, fill = FCD),outlier.shape = NA, alpha = .5, width = .25, colour = "black")+
+  geom_line(data = sumclassic, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), linetype = 3)+
+  geom_point(data = sumclassic, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), shape = 18) +
+  geom_errorbar(data = sumclassic, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD, ymin = PAC_mean-se, ymax = PAC_mean+se), width = .05)+
+  scale_colour_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+ facet_wrap(~Time) + theme_classic2()
+
+tre_ripples
+
+
+### 4-30 Hz and Ripples
+
+sumclassic2 <- summarySE(classic2, measurevar = "PAC", groupvars=c("FCD", "Electrodes"))
+
+trenta_ripples <- ggplot(classic2, aes(x = Electrodes, y = PAC, fill = FCD)) +
+  geom_flat_violin(aes(fill = FCD),position = position_nudge(x = .1, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA)+
+  geom_point(aes(x = as.numeric(Electrodes)-.15, y = PAC, colour = FCD),position = position_jitter(width = .05), size = 1, shape = 20)+
+  geom_boxplot(aes(x = Electrodes, y = PAC, fill = FCD),outlier.shape = NA, alpha = .5, width = .25, colour = "black")+
+  geom_line(data = sumclassic2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), linetype = 3)+
+  geom_point(data = sumclassic2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), shape = 18) +
+  geom_errorbar(data = sumclassic2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD, ymin = PAC_mean-se, ymax = PAC_mean+se), width = .05)+
+  scale_colour_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+ facet_wrap(~Time) + theme_classic2()
+
+trenta_ripples
+
+
+### 3-4 Hz and Gamma
+
+sumgamma <- summarySE(gamma, measurevar = "PAC", groupvars=c("FCD", "Electrodes"))
+
+tre_gamma <-  ggplot(gamma, aes(x = Electrodes, y = PAC, fill = FCD)) +
+  geom_flat_violin(aes(fill = FCD),position = position_nudge(x = .1, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA)+
+  geom_point(aes(x = as.numeric(Electrodes)-.15, y = PAC, colour = FCD),position = position_jitter(width = .05), size = 1, shape = 20)+
+  geom_boxplot(aes(x = Electrodes, y = PAC, fill = FCD),outlier.shape = NA, alpha = .5, width = .25, colour = "black")+
+  geom_line(data = sumgamma, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), linetype = 3)+
+  geom_point(data = sumgamma, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), shape = 18) +
+  geom_errorbar(data = sumgamma, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD, ymin = PAC_mean-se, ymax = PAC_mean+se), width = .05)+
+  scale_colour_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+ facet_wrap(~Time) + theme_classic2()
+
+tre_gamma
+
+### 4-30 Hz and Gamma
+
+sumgamma2 <- summarySE(gamma2, measurevar = "PAC", groupvars=c("FCD", "Electrodes"))
+
+tre_gamma2 <-  ggplot(gamma2, aes(x = Electrodes, y = PAC, fill = FCD)) +
+  geom_flat_violin(aes(fill = FCD),position = position_nudge(x = .1, y = 0), adjust = 1.5, trim = FALSE, alpha = .5, colour = NA)+
+  geom_point(aes(x = as.numeric(Electrodes)-.15, y = PAC, colour = FCD),position = position_jitter(width = .05), size = 1, shape = 20)+
+  geom_boxplot(aes(x = Electrodes, y = PAC, fill = FCD),outlier.shape = NA, alpha = .5, width = .25, colour = "black")+
+  geom_line(data = sumgamma2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), linetype = 3)+
+  geom_point(data = sumgamma2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD), shape = 18) +
+  geom_errorbar(data = sumgamma2, aes(x = as.numeric(Electrodes)+.1, y = PAC_mean, group = FCD, colour = FCD, ymin = PAC_mean-se, ymax = PAC_mean+se), width = .05)+
+  scale_colour_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+ facet_wrap(~Time) + theme_classic2()
+
+tre_gamma2
+
+
+########################################################################################################################################
+
+###################### Roc curve ##############################
+
+rocobj <- roc(classic_isoz$FCD, classic_isoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic_isoz <- classic_isoz %>% mutate(PACV = ifelse(PAC > 0.065, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic_isoz$FCD,classic_isoz$PACV))
+
+
+
+rocobj <- roc(classic_insoz$FCD, classic_insoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic_insoz <- classic_insoz %>% mutate(PACV = ifelse(PAC > 0.095, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic_insoz$FCD,classic_insoz$PACV))
+
+
+
+rocobj <- roc(classic_psoz$FCD, classic_psoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic_psoz <- classic_psoz %>% mutate(PACV = ifelse(PAC > 0.075, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic_psoz$FCD,classic_psoz$PACV))
+
+
+
+
+rocobj <- roc(classic_pnsoz$FCD, classic_pnsoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic_pnsoz <- classic_pnsoz %>% mutate(PACV = ifelse(PAC > 0.065, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic_pnsoz$FCD,classic_pnsoz$PACV))
+
+
+
+rocobj <- roc(classic2_isoz$FCD, classic2_isoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic2_isoz <- classic2_isoz %>% mutate(PACV = ifelse(PAC > 0.07, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic2_isoz$FCD,classic2_isoz$PACV))
+
+
+
+
+rocobj <- roc(classic2_insoz$FCD, classic2_insoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic2_insoz <- classic2_insoz %>% mutate(PACV = ifelse(PAC > 0.095, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic2_insoz$FCD,classic2_insoz$PACV))
+
+
+
+
+rocobj <- roc(classic2_psoz$FCD, classic2_psoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic2_psoz <- classic2_psoz %>% mutate(PACV = ifelse(PAC > 0.085, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic2_psoz$FCD,classic2_psoz$PACV))
+
+
+
+rocobj <- roc(classic2_pnsoz$FCD, classic2_pnsoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+classic2_pnsoz <- classic2_pnsoz %>% mutate(PACV = ifelse(PAC > 0.105, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(classic2_pnsoz$FCD,classic2_pnsoz$PACV))
+
+
+
+rocobj <- roc(gamma_isoz$FCD, gamma_isoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma_isoz <- gamma_isoz %>% mutate(PACV = ifelse(PAC > 0.105, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma_isoz$FCD,gamma_isoz$PACV))
+
+
+
+
+
+rocobj <- roc(gamma_insoz$FCD, gamma_insoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma_insoz <- gamma_insoz %>% mutate(PACV = ifelse(PAC > 0.095, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma_insoz$FCD,gamma_insoz$PACV))
+
+
+
+
+rocobj <- roc(gamma_psoz$FCD, gamma_psoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma_psoz <- gamma_psoz %>% mutate(PACV = ifelse(PAC > 0.1, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma_psoz$FCD,gamma_psoz$PACV))
+
+
+
+
+rocobj <- roc(gamma_pnsoz$FCD, gamma_pnsoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma_pnsoz <- gamma_pnsoz %>% mutate(PACV = ifelse(PAC > 0.115, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma_pnsoz$FCD,gamma_pnsoz$PACV))
+
+
+
+rocobj <- roc(gamma2_isoz$FCD, gamma2_isoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma2_isoz <- gamma2_isoz %>% mutate(PACV = ifelse(PAC > 0.105, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma2_isoz$FCD,gamma2_isoz$PACV))
+
+
+
+rocobj <- roc(gamma2_insoz$FCD, gamma2_insoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma2_insoz <- gamma2_insoz %>% mutate(PACV = ifelse(PAC > 0.145, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma2_insoz$FCD,gamma2_insoz$PACV))
+
+
+
+rocobj <- roc(gamma2_psoz$FCD, gamma2_psoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma2_psoz <- gamma2_psoz %>% mutate(PACV = ifelse(PAC > 0.09, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma2_psoz$FCD,gamma2_psoz$PACV))
+
+
+
+rocobj <- roc(gamma2_pnsoz$FCD, gamma2_pnsoz$PAC)
+plot(rocobj)
+ci.thresolds.obj <- ci.thresholds(rocobj)
+plot(ci.thresolds.obj)
+rocobj$auc
+coords(rocobj, "best")
+coords(rocobj, x="best", input="threshold", best.method="youden",ret=c("threshold", "sens", "spec", "ppv", "npv", "acc"))
+
+gamma2_pnsoz <- gamma2_pnsoz %>% mutate(PACV = ifelse(PAC > 0.11, "1", "0")) %>% mutate(PACV = factor(PACV))
+
+fisher.test(table(gamma2_pnsoz$FCD,gamma2_pnsoz$PACV))
+
+
+
+
+
+
+######################### ROC curve plot ######################
+
+library("ROCit")
+
+rocit_emp4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "non")
+
+ciROC_emp90 <- ciROC(rocit_emp4, 
+                     level = 0.9)
+set.seed(200)
+
+plot(rocit_emp4, col = 1, 
+     legend = FALSE, percentage = TRUE)
+lines(rocit_non4$TPR~rocit_non4$FPR, 
+      col = 4, lwd = 2)    
+legend("bottomright", c("Empirical ROC","non-parametric ROC",
+                        "95% CI (Empirical)"),
+       lty = c(1,1,2,2), col = 
+         c(1,4,1,4), lwd = c(2,2,1,1),cex = 0.5)
+
+
+rocit_emp4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic_isoz$PAC, 
+                    class = classic_isoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic_insoz$PAC, 
+                    class = classic_insoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic_insoz$PAC, 
+                    class = classic_insoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic_psoz$PAC, 
+                    class = classic_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic_psoz$PAC, 
+                    class = classic_psoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic_pnsoz$PAC, 
+                    class = classic_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic_pnsoz$PAC, 
+                    class = classic_pnsoz$FCD, 
+                    method = "non")
+
+
+
+
+
+rocit_emp4 <- rocit(score = classic2_isoz$PAC, 
+                    class = classic2_isoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic2_isoz$PAC, 
+                    class = classic2_isoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic2_insoz$PAC, 
+                    class = classic2_insoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic2_insoz$PAC, 
+                    class = classic2_insoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic2_psoz$PAC, 
+                    class = classic2_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic2_psoz$PAC, 
+                    class = classic2_psoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = classic2_pnsoz$PAC, 
+                    class = classic2_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = classic2_pnsoz$PAC, 
+                    class = classic2_pnsoz$FCD, 
+                    method = "non")
+
+
+
+
+rocit_emp4 <- rocit(score = gamma_isoz$PAC, 
+                    class = gamma_isoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma_isoz$PAC, 
+                    class = gamma_isoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma_insoz$PAC, 
+                    class = gamma_insoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma_insoz$PAC, 
+                    class = gamma_insoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma_psoz$PAC, 
+                    class = gamma_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma_psoz$PAC, 
+                    class = gamma_psoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma_pnsoz$PAC, 
+                    class = gamma_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma_pnsoz$PAC, 
+                    class = gamma_pnsoz$FCD, 
+                    method = "non")
+
+
+
+
+rocit_emp4 <- rocit(score = gamma2_isoz$PAC, 
+                    class = gamma2_isoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma2_isoz$PAC, 
+                    class = gamma2_isoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma2_insoz$PAC, 
+                    class = gamma2_insoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma2_insoz$PAC, 
+                    class = gamma2_insoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma2_psoz$PAC, 
+                    class = gamma2_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma2_psoz$PAC, 
+                    class = gamma2_psoz$FCD, 
+                    method = "non")
+
+rocit_emp4 <- rocit(score = gamma2_pnsoz$PAC, 
+                    class = gamma2_psoz$FCD, 
+                    method = "emp")
+
+rocit_non4 <- rocit(score = gamma2_pnsoz$PAC, 
+                    class = gamma2_pnsoz$FCD, 
+                    method = "non")
+
+
+#############################################################
+
+
+###GLM again !!!
+
+# Run a lmer and save it as lmer_out, for 3-4 - ripples principal factors
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + FCD*Time + (1 | Id), data = classic)
+
+summary (lmer_out)
+
+lmer_out.null <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = classic)
+
+anova(lmer_out, lmer_out.null)
+
+# Interaction factors
+
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + FCD * Electrodes + (1 | Id), data = classic)
+
+lmer_out.null <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = classic)
+
+anova(lmer_out, lmer_out.null)
+
+
+###################################
+
+
+# Run a lmer and save it as lmer_out, for 3-4 - ripples principal factors
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = classic2)
+
+summary (lmer_out)
+
+lmer_out.null <- lmer(PAC ~ Electrodes + Time + (1 | Id), data = classic2)
+
+anova(lmer_out, lmer_out.null)
+
+# Interaction factors
+
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + FCD * Electrodes + (1 | Id), data = classic2)
+
+lmer_out.null <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = classic2)
+
+anova(lmer_out, lmer_out.null)
+
+
+#############################################
+
+# Run a lmer and save it as lmer_out, for 3-4 - ripples principal factors
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = gamma)
+
+summary (lmer_out)
+
+lmer_out.null <- lmer(PAC ~ Electrodes + Time + (1 | Id), data = gamma)
+
+anova(lmer_out, lmer_out.null)
+
+# Interaction factors
+
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + FCD * Electrodes + (1 | Id), data = gamma)
+
+lmer_out.null <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = gamma)
+
+anova(lmer_out, lmer_out.null)
+
+
+##################################################
+
+# Run a lmer and save it as lmer_out, for 3-4 - ripples principal factors
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = gamma2)
+
+summary (lmer_out)
+
+lmer_out.null <- lmer(PAC ~ Electrodes + Time + (1 | Id), data = gamma2)
+
+anova(lmer_out, lmer_out.null)
+
+# Interaction factors
+
+lmer_out <- lmer(PAC ~ FCD + Electrodes + Time + FCD * Electrodes + (1 | Id), data = gamma2)
+
+lmer_out.null <- lmer(PAC ~ FCD + Electrodes + Time + (1 | Id), data = gamma2)
+
+anova(lmer_out, lmer_out.null)
+
+
+
+
+
+
